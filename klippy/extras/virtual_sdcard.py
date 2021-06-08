@@ -16,8 +16,8 @@ class VirtualSD:
         self.sdcard_dirname = os.path.normpath(os.path.expanduser(sd))
         self.current_file = None
         self.file_position = self.file_size = 0
-        # Print Stat Tracking
-        self.print_stats = printer.load_object(config, 'print_stats')
+        # Ensure that Print Stat Tracking is loaded
+        printer.load_object(config, 'print_stats')
         # Work timer
         self.reactor = printer.get_reactor()
         self.must_pause_work = self.cmd_from_sd = False
@@ -98,34 +98,36 @@ class VirtualSD:
         self.must_pause_work = False
         self.work_timer = self.reactor.register_timer(
             self.work_handler, self.reactor.NOW)
+    def do_cancel(self):
+        self.do_pause()
     # G-Code commands
     def cmd_error(self, gcmd):
         raise gcmd.error("SD write not supported")
-    def _reset_file(self):
+    def _reset_file(self, gcmd):
         if self.current_file is not None:
             self.do_pause()
             self.current_file.close()
             self.current_file = None
         self.file_position = self.file_size = 0.
-        self.print_stats.reset()
+        self.gcode.run_script_from_command("PRINT_STATS_RESET")
     cmd_SDCARD_RESET_FILE_help = "Clears a loaded SD File. Stops the print "\
         "if necessary"
     def cmd_SDCARD_RESET_FILE(self, gcmd):
         if self.cmd_from_sd:
             raise gcmd.error(
                 "SDCARD_RESET_FILE cannot be run from the sdcard")
-        self._reset_file()
+        self._reset_file(gcmd)
     cmd_SDCARD_PRINT_FILE_help = "Loads a SD file and starts the print.  May "\
         "include files in subdirectories."
     def cmd_SDCARD_PRINT_FILE(self, gcmd):
         if self.work_timer is not None:
             raise gcmd.error("SD busy")
-        self._reset_file()
+        self._reset_file(gcmd)
         filename = gcmd.get("FILENAME")
         if filename[0] == '/':
             filename = filename[1:]
         self._load_file(gcmd, filename, check_subdirs=True)
-        self.do_resume()
+        self.cmd_M24(gcmd)
     def cmd_M20(self, gcmd):
         # List SD card
         files = self.get_file_list()
@@ -140,7 +142,7 @@ class VirtualSD:
         # Select SD file
         if self.work_timer is not None:
             raise gcmd.error("SD busy")
-        self._reset_file()
+        self._reset_file(gcmd)
         try:
             orig = gcmd.get_commandline()
             filename = orig[orig.find("M23") + 4:].split()[0].strip()
@@ -167,12 +169,15 @@ class VirtualSD:
         except:
             logging.exception("virtual_sdcard file open")
             raise gcmd.error("Unable to open file")
+
+        # Escape existing double quotes in the file name
+        filename = filename.replace("\"", "\\\"")
+        self.gcode.run_script_from_command("PRINT_STATS_START FILENAME=\"%s\"" % (filename))
         gcmd.respond_raw("File opened:%s Size:%d" % (filename, fsize))
         gcmd.respond_raw("File selected")
         self.current_file = f
         self.file_position = 0
         self.file_size = fsize
-        self.print_stats.set_current_file(filename)
     def cmd_M24(self, gcmd):
         # Start/resume SD print
         self.do_resume()
@@ -208,7 +213,7 @@ class VirtualSD:
             logging.exception("virtual_sdcard seek")
             self.work_timer = None
             return self.reactor.NEVER
-        self.print_stats.note_start()
+        self.gcode.run_script("PRINT_STATS_RESUME")
         gcode_mutex = self.gcode.get_mutex()
         partial_input = ""
         lines = []
@@ -245,7 +250,9 @@ class VirtualSD:
             try:
                 self.gcode.run_script(line)
             except self.gcode.error as e:
-                self.print_stats.note_error(str(e))
+                error = str(e)
+                error = error.replace("\"", "\\\"")
+                self.gcode.run_script("PRINT_STATS_ERROR ERROR=\"%s\"" % (error))
                 break
             except:
                 logging.exception("virtual_sdcard dispatch")
@@ -266,9 +273,9 @@ class VirtualSD:
         self.work_timer = None
         self.cmd_from_sd = False
         if self.current_file is not None:
-            self.print_stats.note_pause()
+            self.gcode.run_script("PRINT_STATS_PAUSE")
         else:
-            self.print_stats.note_complete()
+            self.gcode.run_script("PRINT_STATS_COMPLETE")
         return self.reactor.NEVER
 
 def load_config(config):

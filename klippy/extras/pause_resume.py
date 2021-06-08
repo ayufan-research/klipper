@@ -80,7 +80,9 @@ class PauseResume:
         self.is_paused = self.pause_command_sent = False
     def cmd_CANCEL_PRINT(self, gcmd):
         self.cmd_PAUSE(gcmd)
-        if not self.sd_paused:
+        if self.sd_paused:
+            self.gcode.run_script("PRINT_STATS_CANCEL")
+        else:
             gcmd.respond_info("action:cancel")
         self.cmd_CLEAR_PAUSE(gcmd)
 
