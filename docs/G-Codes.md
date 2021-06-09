@@ -321,6 +321,10 @@ display data groups in the config, e.g. `[display_data <group>
 command. If DISPLAY is not specified it defaults to "display" (the
 primary display).
 
+#### MENU_SHOW
+`MENU_SHOW ITEM=<item> [ROOT=0|1]`: Show a menu item on top of currently
+shown menu. If `ROOT=1` is specified it will replace a current tree.
+
 ### [display_status]
 
 The display_status module is automatically loaded if a
