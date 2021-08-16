@@ -6,18 +6,18 @@
 
 ISR(TIMER0_OVF_vect)
 {
-	if (OCR0B + DUTY_CYCLE >= 255) {
+	OCR0B += DUTY_CYCLE;
+
+	if (OCR0B < DUTY_CYCLE) {
 		OCR0B = 255;
 		TIMSK0 &= ~(1 << TOIE0);
-	} else {
-		OCR0B += DUTY_CYCLE;
 	}
 }
 
 void timer0_restart(uint8_t val)
 {
 	TCNT0 = 0;
-	OCR0B = DUTY_CYCLE - 1;
+	OCR0B = DUTY_CYCLE;
 	// Fast Mode + Inverted mode
 	if (val) {
 		// HIGH
