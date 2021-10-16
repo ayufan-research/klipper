@@ -260,7 +260,8 @@ class GCodeDispatch:
         s.commenters = '#;'
         try:
             eparams = [earg.split('=', 1) for earg in s]
-            eparams = { k.upper(): v for k, v in eparams }
+            # TODO: If a single element, return None
+            eparams = { kv[0].upper(): kv[1] if len(kv) == 2 else None for kv in eparams }
         except ValueError as e:
             raise self.error("Malformed command '%s'"
                              % (gcmd.get_commandline(),))
