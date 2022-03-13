@@ -251,7 +251,8 @@ class GCodeDispatch:
         eargs = m.group('args')
         try:
             eparams = [earg.split('=', 1) for earg in shlex.split(eargs)]
-            eparams = { k.upper(): v for k, v in eparams }
+            # TODO: If a single element, return None
+            eparams = { kv[0].upper(): kv[1] if len(kv) == 2 else None for kv in eparams }
             gcmd._params.clear()
             gcmd._params.update(eparams)
             return gcmd
