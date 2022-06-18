@@ -6,6 +6,7 @@
 
 #include "autoconf.h" // CONFIG_CLOCK_REF_FREQ
 #include "board/armcm_boot.h" // VectorTable
+#include "board/irq.h" // irq_disable
 #include "board/armcm_reset.h" // try_request_canboot
 #include "command.h" // DECL_CONSTANT_STR
 #include "internal.h" // get_pclock_frequency
@@ -187,11 +188,36 @@ clock_setup(void)
  * USB bootloader
  ****************************************************************/
 
+#define USB_BOOT_FLAG_ADDR (CONFIG_RAM_START + CONFIG_RAM_SIZE - 1024)
+#define USB_BOOT_FLAG 0x55534220424f4f54 // "USB BOOT"
+
+// Flag that bootloader is desired and reboot
+static void
+usb_reboot_for_dfu_bootloader(void)
+{
+    irq_disable();
+    *(uint64_t*)USB_BOOT_FLAG_ADDR = USB_BOOT_FLAG;
+    NVIC_SystemReset();
+}
+
+// Check if rebooting into system DFU Bootloader
+static void
+check_usb_dfu_bootloader(void)
+{
+    if (!CONFIG_USBSERIAL || *(uint64_t*)USB_BOOT_FLAG_ADDR != USB_BOOT_FLAG)
+        return;
+    *(uint64_t*)USB_BOOT_FLAG_ADDR = 0;
+    uint32_t *sysbase = (uint32_t*)0x1FF09800;
+    asm volatile("mov sp, %0\n bx %1"
+                 : : "r"(sysbase[0]), "r"(sysbase[1]));
+}
+
 // Handle USB reboot requests
 void
 usb_request_bootloader(void)
 {
     try_request_canboot();
+    usb_reboot_for_dfu_bootloader();
 }
 
 
@@ -203,6 +229,31 @@ usb_request_bootloader(void)
 void
 armcm_main(void)
 {
+    // Reset clock registers (in case bootloader has changed them)
+    RCC->CFGR = 0x00000000;
+    RCC->CR = RCC_CR_HSION;
+    while (RCC->CR & RCC_CR_PLLRDY)
+        ;
+    RCC->D1CFGR = 0x00000000;
+    RCC->D2CFGR = 0x00000000;
+    RCC->D3CFGR = 0x00000000;
+    RCC->PLLCFGR =  0x01FF0000;
+    RCC->D1CCIPR = 0x00000000;
+    RCC->D2CCIP1R = 0x00000000;
+    RCC->D2CCIP2R = 0x00000000;
+    RCC->D3CCIPR = 0x00000000;
+    RCC->AHB1ENR = 0x00000000;
+    RCC->AHB2ENR = 0x00000000;
+    RCC->AHB3ENR = 0x00000000;
+    RCC->AHB4ENR = 0x00000000;
+    RCC->APB1LENR = 0x00000000;
+    RCC->APB1HENR = 0x00000000;
+    RCC->APB2ENR = 0x00000000;
+    RCC->APB3ENR = 0x00000000;
+    RCC->APB4ENR = 0x00010000;
+
+    check_usb_dfu_bootloader();
+
     // Run SystemInit() and then restore VTOR
     SystemInit();
     SCB->VTOR = (uint32_t)VectorTable;
