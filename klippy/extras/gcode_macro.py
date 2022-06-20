@@ -126,8 +126,6 @@ class GCodeMacro:
         name = config.get_name().split()[1]
         self.alias = name.upper()
         self.printer = printer = config.get_printer()
-        gcode_macro = printer.load_object(config, 'gcode_macro')
-        self.template = gcode_macro.load_template(config, 'gcode')
         self.gcode = printer.lookup_object('gcode')
         self.rename_existing = config.get("rename_existing", None)
         self.cmd_desc = config.get("description", "G-Code macro")
@@ -147,12 +145,22 @@ class GCodeMacro:
                                         desc=self.cmd_SET_GCODE_VARIABLE_help)
         self.in_script = False
         self.variables = {}
+        self.reload_config(config)
+    def reload_config(self, config):
+        rename_existing = config.get("rename_existing", None)
+        if self.rename_existing != rename_existing:
+            raise config.error("G-Code cannot be reloaded due to change of rename_existing ('%s' vs '%s')"
+                    % (rename_existing, self.rename_existing))
+        gcode_macro = self.printer.load_object(config, 'gcode_macro')
+        self.template = gcode_macro.load_template(config, 'gcode')
         prefix = 'variable_'
         for option in config.get_prefix_options(prefix):
             try:
                 literal = ast.literal_eval(config.get(option))
                 json.dumps(literal, separators=(',', ':'))
-                self.variables[option[len(prefix):]] = literal
+                key = option[len(prefix):]
+                if key not in self.variables:
+                    self.variables[key] = literal
             except (SyntaxError, TypeError, ValueError) as e:
                 raise config.error(
                     "Option '%s' in section '%s' is not a valid literal: %s" % (
