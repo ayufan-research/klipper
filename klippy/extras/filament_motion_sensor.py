@@ -22,9 +22,9 @@ class EncoderSensor:
         # Get printer objects
         self.reactor = self.printer.get_reactor()
         self.runout_helper = filament_switch_sensor.RunoutHelper(config)
-        self.get_status = self.runout_helper.get_status
         self.extruder = None
         self.estimated_print_time = None
+        self.events = 0
         # Initialise internal state
         self.filament_runout_pos = None
         # Register commands and event handlers
@@ -66,7 +66,12 @@ class EncoderSensor:
         self.runout_helper.note_filament_present(
                 extruder_pos < self.filament_runout_pos)
         return eventtime + CHECK_RUNOUT_TIMEOUT
+    def get_status(self, eventtime):
+        status = self.runout_helper.get_status(eventtime)
+        status['events'] = self.events
+        return status
     def encoder_event(self, eventtime, state):
+        self.events += 1
         if self.extruder is not None:
             self._update_filament_runout_pos(eventtime)
             # Check for filament insertion
