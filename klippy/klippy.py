@@ -87,6 +87,15 @@ class Printer:
         if module in self.objects:
             return [(module, self.objects[module])] + objs
         return objs
+    def find_module_path(self, module_name):
+        for extra_path in reversed(self.start_args['extras']):
+            py_name = os.path.join(extra_path, module_name + '.py')
+            if os.path.exists(py_name):
+                return py_name
+            py_dirname = os.path.join(extra_path, module_name, '__init__.py')
+            if os.path.exists(py_dirname):
+                return py_dirname
+        return None
     def load_object(self, config, section, default=configfile.sentinel):
         if section in self.objects:
             return self.objects[section]
@@ -97,6 +106,12 @@ class Printer:
             custom_component = self.load_object(config, 'custom_component ' + module_name, default=None)
             if custom_component:
                 mod = custom_component.load_module()
+        if not mod:
+            module_path = self.find_module_path(module_name)
+            if module_path:
+                spec = importlib.util.spec_from_file_location(module_name, module_path)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
         if not mod:
             py_name = os.path.join(os.path.dirname(__file__),
                                 'extras', module_name + '.py')
@@ -289,6 +304,9 @@ def main():
     opts.add_option("-d", "--dictionary", dest="dictionary", type="string",
                     action="callback", callback=arg_dictionary,
                     help="file to read for mcu protocol dictionary")
+    opts.add_option("-x", "--extra", dest="extras", type="string",
+                    action="append", default=[],
+                    help="list of directories to load components")
     opts.add_option("--import-test", action="store_true",
                     help="perform an import module test")
     options, args = opts.parse_args()
@@ -317,6 +335,7 @@ def main():
         bglogger = queuelogger.setup_bg_logging(options.logfile, debuglevel)
     else:
         logging.getLogger().setLevel(debuglevel)
+    start_args['extras'] = options.extras
     logging.info("Starting Klippy...")
     git_info = util.get_git_version(__file__)
     git_vers = git_info["version"]
