@@ -479,13 +479,14 @@ class PrinterConfig:
         data = cfgrdr.read_config_file(filename)
         fileconfig = cfgrdr.build_fileconfig(data, filename)
         return ConfigWrapper(self.printer, fileconfig, {}, 'printer')
-    def read_main_config(self):
+    def read_main_config(self, set_raw_status = True):
         fileconfig, autosave_fileconfig = self.autosave.load_main_config()
         access_tracking = self.validate.start_access_tracking(
             autosave_fileconfig)
         config = ConfigWrapper(self.printer, fileconfig,
                                access_tracking, 'printer')
-        self._build_status_config(config)
+        if set_raw_status:
+            self._build_status_config(config)
         return config
     def log_config(self, config):
         cfgrdr = ConfigFileReader()

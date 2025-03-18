@@ -13,7 +13,7 @@ class DebugHelpers:
     cmd_DEBUG_RELOAD_help = "Reload all G-Code macros from config"
     def cmd_DEBUG_RELOAD(self, gcmd):
         configfile = self.printer.lookup_object('configfile')
-        config = configfile.read_main_config()
+        config = configfile.read_main_config(False)
         for section in config.get_prefix_sections(''):
             name = section.get_name()
             obj = self.printer.lookup_object(name, None)
